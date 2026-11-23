@@ -1,0 +1,6 @@
+target
+.git
+.env
+
+# Day 5
+logs
