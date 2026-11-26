@@ -11,8 +11,8 @@ public class IncidentNote {
  @Column(name="body",nullable=false,length=4000) private String body;
  @Column(name="created_at",nullable=false,columnDefinition="timestamp with time zone") private Instant createdAt;
  protected IncidentNote() {}
- public IncidentNote(String teamId, String incidentId, String actorUserId, String body) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.body=body; this.createdAt=Instant.now();
+ public IncidentNote(String teamId, String incidentId, String actorUserId, String body,Instant now) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.body=body; this.createdAt=now;
  }
  public String getTeamId(){return teamId;}
  public String getIncidentId(){return incidentId;}

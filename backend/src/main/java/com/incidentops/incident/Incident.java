@@ -18,12 +18,12 @@ public class Incident {
  @Column(name="created_at",nullable=false,columnDefinition="timestamp with time zone") private Instant createdAt;
  @Column(name="updated_at",nullable=false,columnDefinition="timestamp with time zone") private Instant updatedAt;
  protected Incident() {}
- public Incident(String teamId,String serviceId,String number,String title,String description,Severity severity,String actor) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.serviceId=serviceId; incidentNumber=number; this.title=title.trim(); this.description=description; this.severity=severity; status=IncidentStatus.OPEN; creatorUserId=actor; createdAt=Instant.now(); updatedAt=createdAt;
+ public Incident(String teamId,String serviceId,String number,String title,String description,Severity severity,String actor,Instant now) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.serviceId=serviceId; incidentNumber=number; this.title=title.trim(); this.description=description; this.severity=severity; status=IncidentStatus.OPEN; creatorUserId=actor; createdAt=now; updatedAt=createdAt;
  }
- public void details(String title,String description,Severity severity){this.title=title.trim();this.description=description;this.severity=severity;updatedAt=Instant.now();}
- void status(IncidentStatus next){status=next;updatedAt=Instant.now();}
- void assignee(String userId){assigneeUserId=userId;updatedAt=Instant.now();}
+ public void details(String title,String description,Severity severity,Instant now){this.title=title.trim();this.description=description;this.severity=severity;updatedAt=now;}
+ void status(IncidentStatus next,Instant now){status=next;updatedAt=now;}
+ void assignee(String userId,Instant now){assigneeUserId=userId;updatedAt=now;}
  public String getId(){return id;} public String getTeamId(){return teamId;} public String getServiceId(){return serviceId;}
  public String getIncidentNumber(){return incidentNumber;} public String getTitle(){return title;} public String getDescription(){return description;}
  public Severity getSeverity(){return severity;} public IncidentStatus getStatus(){return status;} public long getVersion(){return version;}

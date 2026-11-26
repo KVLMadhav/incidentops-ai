@@ -11,8 +11,8 @@ public class IncidentAlert {
  @Column(name="alert_id",nullable=false,length=36) private String alertId;
  @Column(name="linked_at",nullable=false,columnDefinition="timestamp with time zone") private Instant linkedAt;
  protected IncidentAlert() {}
- public IncidentAlert(String teamId, String incidentId, String actorUserId, String alertId) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.alertId=alertId; this.linkedAt=Instant.now();
+ public IncidentAlert(String teamId, String incidentId, String actorUserId, String alertId,Instant now) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.alertId=alertId; this.linkedAt=now;
  }
  public String getTeamId(){return teamId;}
  public String getIncidentId(){return incidentId;}

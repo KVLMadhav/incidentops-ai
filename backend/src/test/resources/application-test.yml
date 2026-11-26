@@ -1,12 +1,22 @@
 spring:
   datasource:
+    # Separate Spring test contexts must not retain each other's incident/user rows.
     url: jdbc:h2:mem:incident_ops_${random.uuid};MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
     username: sa
     password: ""
     driver-class-name: org.h2.Driver
 app:
+  notifications:
+    delivery-enabled: false
+  ops:
+    enabled: false
+  events:
+    enabled: false
+  cache:
+    enabled: false
+  sla:
+    scanning-enabled: false
   jwt:
-    # Fixed test-only signing key, never used by the runtime configuration.
     secret-base64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
   bootstrap:
     enabled: false

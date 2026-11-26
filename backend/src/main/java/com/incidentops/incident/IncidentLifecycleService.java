@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 @Service
 public class IncidentLifecycleService {
+ private final java.time.Clock clock;
+ public IncidentLifecycleService(java.time.Clock clock){this.clock=clock;}
  private static final Map<IncidentStatus,List<IncidentStatus>> NEXT=Map.of(
   IncidentStatus.OPEN,List.of(IncidentStatus.ACKNOWLEDGED),
   IncidentStatus.ACKNOWLEDGED,List.of(IncidentStatus.INVESTIGATING),
@@ -19,7 +21,7 @@ public class IncidentLifecycleService {
   if(!NEXT.get(old).contains(next))
    throw new ApiException(HttpStatus.CONFLICT,"INVALID_TRANSITION",
     "Cannot move from "+old+" to "+next+". Allowed next statuses: "+NEXT.get(old));
-  incident.status(next);
-  return new IncidentStatusHistory(incident.getTeamId(),incident.getId(),actor,old,next,reason);
+  incident.status(next,clock.instant());
+  return new IncidentStatusHistory(incident.getTeamId(),incident.getId(),actor,old,next,reason,clock.instant());
  }
 }

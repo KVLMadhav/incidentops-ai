@@ -1,6 +1,15 @@
 app:
+  ops:
+    enabled: false
+  notifications:
+    delivery-enabled: false
+  events:
+    enabled: false
+  cache:
+    enabled: false
+  sla:
+    scanning-enabled: false
   jwt:
-    # Fixed test-only signing key, never used by the runtime configuration.
     secret-base64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
   bootstrap:
     enabled: false

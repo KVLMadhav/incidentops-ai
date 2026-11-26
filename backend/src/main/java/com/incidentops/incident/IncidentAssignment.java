@@ -13,8 +13,8 @@ public class IncidentAssignment {
  @Column(name="reason",length=1000) private String reason;
  @Column(name="assigned_at",nullable=false,columnDefinition="timestamp with time zone") private Instant assignedAt;
  protected IncidentAssignment() {}
- public IncidentAssignment(String teamId, String incidentId, String actorUserId, String assigneeUserId, String previousAssigneeUserId, String reason) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.assigneeUserId=assigneeUserId; this.previousAssigneeUserId=previousAssigneeUserId; this.reason=reason; this.assignedAt=Instant.now();
+ public IncidentAssignment(String teamId, String incidentId, String actorUserId, String assigneeUserId, String previousAssigneeUserId, String reason,Instant now) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.assigneeUserId=assigneeUserId; this.previousAssigneeUserId=previousAssigneeUserId; this.reason=reason; this.assignedAt=now;
  }
  public String getTeamId(){return teamId;}
  public String getIncidentId(){return incidentId;}

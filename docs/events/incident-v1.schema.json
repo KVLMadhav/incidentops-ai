@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:incidentops:incident-event:v1",
+  "title": "IncidentOps incident event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "schemaVersion", "type", "teamId", "incidentId", "serviceId", "occurredAt", "producedAt", "correlationId"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "schemaVersion": {"const": 1},
+    "type": {
+      "enum": ["INCIDENT_CREATED", "INCIDENT_UPDATED", "INCIDENT_ASSIGNED", "INCIDENT_STATUS_CHANGED", "INCIDENT_ALERT_LINKED", "INCIDENT_NOTE_ADDED", "SLA_BREACHED"]
+    },
+    "teamId": {"type": "string", "format": "uuid"},
+    "incidentId": {"type": "string", "format": "uuid"},
+    "serviceId": {"type": "string", "format": "uuid"},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producedAt": {"type": "string", "format": "date-time"},
+    "correlationId": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$"}
+  }
+}

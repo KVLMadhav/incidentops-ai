@@ -10,10 +10,12 @@ public class AuditLog {
  @Column(name="actor_user_id",nullable=false,length=36) private String actorUserId;
  @Column(name="action",nullable=false,length=40) private String action;
  @Column(name="detail",length=1000) private String detail;
+ @Column(name="correlation_id",length=100) private String correlationId;
  @Column(name="created_at",nullable=false,columnDefinition="timestamp with time zone") private Instant createdAt;
  protected AuditLog() {}
- public AuditLog(String teamId, String incidentId, String actorUserId, String action, String detail) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.action=action; this.detail=detail; this.createdAt=Instant.now();
+ public AuditLog(String teamId, String incidentId, String actorUserId, String action, String detail,Instant now) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.action=action; this.detail=detail; this.createdAt=now;
+  correlationId=SlaService.correlation(id);
  }
  public String getTeamId(){return teamId;}
  public String getIncidentId(){return incidentId;}
@@ -22,4 +24,5 @@ public class AuditLog {
  public String getDetail(){return detail;}
  public Instant getCreatedAt(){return createdAt;}
  public String getId(){return id;}
+ public String getCorrelationId(){return correlationId;}
 }

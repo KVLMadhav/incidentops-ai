@@ -82,12 +82,15 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain security(HttpSecurity http, UserRepository users, AuthSessionRepository sessions, ObjectMapper mapper,
-        @Qualifier("corsConfigurationSource") CorsConfigurationSource corsSource, SessionAuthentication sessionAuthentication) throws Exception {
+        @Qualifier("corsConfigurationSource") CorsConfigurationSource corsSource, SessionAuthentication sessionAuthentication,
+        @Value("${management.server.port:9091}") int managementPort,org.springframework.core.env.Environment environment) throws Exception {
         http.csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsSource))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .requestCache(cache -> cache.disable())
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(req -> req.getLocalPort()==environment.getProperty("local.management.port",Integer.class,managementPort)
+                    && req.getRequestURI().equals("/actuator/prometheus")).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register",
                     "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()

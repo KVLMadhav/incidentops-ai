@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { SLACountdown, SLAPolicies, Notifications } from './SLAViews';
 import { request, acceptSession, subscribeSession, signOut } from './api';
 
 const NEXT = { OPEN: 'ACKNOWLEDGED', ACKNOWLEDGED: 'INVESTIGATING', INVESTIGATING: 'MITIGATED',
@@ -25,6 +26,10 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [audit, setAudit] = useState([]);
+  const [sla, setSla] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const pendingCommands = useRef(new Map());
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [alertTotalPages, setAlertTotalPages] = useState(0);
@@ -49,12 +54,13 @@ export default function App() {
   const refreshDetail = async (id, resetForm = true) => {
     const revision = ++detailRevision.current;
     const requestedTeam = team;
-    const [incident, events, entries] = await Promise.all([
+    const [incident, events, entries, targets] = await Promise.all([
       request('/teams/' + team + '/incidents/' + id, token),
       request('/teams/' + team + '/incidents/' + id + '/timeline', token),
-      request('/teams/' + team + '/incidents/' + id + '/audit', token)]);
+      request('/teams/' + team + '/incidents/' + id + '/audit', token),
+      request('/teams/' + team + '/incidents/' + id + '/sla', token)]);
     if (revision !== detailRevision.current || requestedTeam !== currentTeam.current) return;
-    setSelected(incident); setTimeline(events); setAudit(entries);
+    setSelected(incident); setTimeline(events); setAudit(entries); setSla(targets);
     if (resetForm) setForm(f => ({ ...f, detailTitle: incident.title, detailDescription: incident.description || '', detailSeverity: incident.severity, detailVersion: incident.version }));
   };
   const refreshList = async () => {
@@ -65,10 +71,13 @@ export default function App() {
     const alertQuery = new URLSearchParams({ page: String(page), size: '20' });
     ['severity', 'serviceId', 'from', 'to'].forEach(key => { if (filter[key]) alertQuery.set(key,
       (key === 'from' || key === 'to') ? new Date(filter[key]).toISOString() : filter[key]); });
-    const [incidentPage, alertPage] = await Promise.all([
+    const [incidentPage, alertPage, teamSummary, inbox] = await Promise.all([
       request('/teams/' + team + '/incidents?' + q, token),
-      request('/teams/' + team + '/alerts?' + alertQuery, token)]);
+      request('/teams/' + team + '/alerts?' + alertQuery, token),
+      request('/teams/' + team + '/summary', token),
+      request('/teams/' + team + '/notifications', token)]);
     if (revision !== listRevision.current || requestedTeam !== currentTeam.current) return;
+    setSummary(teamSummary); setNotifications(inbox);
     setIncidents(incidentPage.items); setTotalPages(incidentPage.totalPages);
     setAlerts(alertPage.items); setAlertTotalPages(alertPage.totalPages);
   };
@@ -77,7 +86,7 @@ export default function App() {
     setTeams(result.items); setUserId(me.id);
     setTeam(current => result.items.some(t => t.id === current) ? current : (result.items[0]?.id || ''));
   }); }, [token]);
-  useEffect(() => { if (!team || !token) return; setSelected(null); setIncidents([]); setAlerts([]); setMembers([]); run(async () => {
+  useEffect(() => { if (!team || !token) return; setSelected(null); setSla([]); setSummary(null); setNotifications([]); pendingCommands.current.clear(); setIncidents([]); setAlerts([]); setMembers([]); run(async () => {
     const [catalog, teamMembers] = await Promise.all([
       request('/teams/' + team + '/services?page=0&size=100', token),
       request('/teams/' + team + '/members?page=0&size=100', token)]);
@@ -85,14 +94,30 @@ export default function App() {
     setServices(catalog.items); setMembers(teamMembers.items); await refreshList();
   }); }, [team]);
   useEffect(() => { if (team && token) run(refreshList); }, [page, filter.status, filter.severity, filter.serviceId, filter.assigneeUserId, filter.from, filter.to]);
+  useEffect(() => {
+    if (!team || !token) return;
+    const timer = setInterval(() => {
+      refreshList().catch(setError);
+      if (selected) refreshDetail(selected.id, false).catch(setError);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [team, token, page, filter, selected?.id]);
   const loginSubmit = e => { e.preventDefault(); run(async () => {
     if (register) await request('/auth/register', '', { method: 'POST', body: JSON.stringify({ ...login, displayName }) });
     const result = await request('/auth/login', '', { method: 'POST', body: JSON.stringify(login) });
     acceptSession(result); setLogin({ email: '', password: '' });
   }); };
   const mutate = (path, payload, method = 'POST') => run(async () => {
+    const isCommand = method === 'POST' && /\/(assignment|transitions|notes)$/.test(path);
+    const key = JSON.stringify([team, path, payload]);
+    if (isCommand) {
+      if (!pendingCommands.current.has(key)) pendingCommands.current.set(key, crypto.randomUUID());
+      payload = { ...payload, commandId: pendingCommands.current.get(key) };
+    }
     await request('/teams/' + team + path, token, { method, body: JSON.stringify(payload) });
+    pendingCommands.current.delete(key);
     if (selected) await refreshDetail(selected.id);
+    if (path.endsWith('/notes')) setField('note', '');
     await refreshList();
   });
   const createIncident = () => run(async () => {
@@ -126,8 +151,11 @@ export default function App() {
       <button onClick={() => { setView('incidents'); setSelected(null); setPage(0); }}>Incidents</button>
       <button onClick={() => { setView('alerts'); setSelected(null); setPage(0); }}>Alerts</button>
       <button onClick={() => { setView('services'); setSelected(null); }}>Services</button>
+      <button onClick={() => { setView('policies'); setSelected(null); }}>SLA policies</button>
       <button disabled={busy} onClick={() => run(async () => { await refreshList(); if (selected) await refreshDetail(selected.id); })}>Reload</button></nav>
-      {view === 'services' ? <section className="card"><h2>Service catalog</h2>
+      {summary && <p role="status">{summary.active} active / {summary.total} total incidents · {summary.breachedTargets} overdue or late targets · Summary as of {new Date(summary.generatedAt).toLocaleTimeString()} (cache up to 10 seconds)</p>}
+      <Notifications key={team} team={team} token={token} notifications={notifications}/>
+      {view === 'policies' ? <SLAPolicies key={team} team={team} token={token} canManage={canManage}/> : view === 'services' ? <section className="card"><h2>Service catalog</h2>
         {!services.length && !busy && <p>No services are available in this team.</p>}
         <p>Showing up to 100 services, sorted by name.</p>
         {services.map(service => <article key={service.id}><h3>{service.name}</h3>
@@ -193,6 +221,9 @@ export default function App() {
           <div className="card"><h3>Link alert</h3><select value={form.alertId} onChange={e => setField('alertId', e.target.value)}>
             <option value="">Choose alert</option>{alerts.filter(a => a.serviceId === selected.serviceId).map(a => <option key={a.id} value={a.id}>{a.title}</option>)}</select>
             <button disabled={busy} onClick={() => mutate('/incidents/' + selected.id + '/alerts', { alertId: form.alertId })}>Link</button></div></>}
+        <h3>SLA targets</h3><p>Deadlines use elapsed time. Reopening keeps the original SLA. Updates refresh every 15 seconds.</p>
+        {sla.map(target => <div className="event" key={target.target}><strong>{target.target}</strong> · due {new Date(target.dueAt).toLocaleString()} · <SLACountdown target={target}/>
+          {target.breachedAt && <p className="error">Breach detected {new Date(target.breachedAt).toLocaleString()}</p>}</div>)}
         <h3>Timeline</h3>{!timeline.length && <p>No timeline entries.</p>}
         {timeline.map(e => <div className="event" key={e.id}><strong>{e.type}</strong> · {new Date(e.at).toLocaleString()}<p>{e.detail}</p></div>)}
         <h3>Audit entries</h3>{audit.map(e => <div className="event" key={e.id}>{e.action} · {new Date(e.createdAt).toLocaleString()}</div>)}

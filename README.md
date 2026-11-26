@@ -1,21 +1,19 @@
-# IncidentOps AI — Days 1 and 2
+# IncidentOps AI — Days 1–4
 
-A Java 21 / Spring Boot 3.5.16 application with PostgreSQL and a React/Vite client.
-
-This publishing edition includes **only the Day 1 and Day 2 feature scope**. It was separated from the evolving learning workspace on 2026-11-23; that workspace remains unchanged. This is a verified publishing edition, not a claim to recover an exact historical Git commit (the learning workspace had no commits).
+Java 21, Spring Boot 3.5.16, PostgreSQL 17, Kafka, Redis, and a React/Vite client. This publishing edition extends the existing Days 1–2 repository with reliability and SLA features.
 
 ## Included
 
-- **Day 1:** BCrypt login, short-lived JWT access tokens, hashed rotating refresh tokens, logout/reuse revocation, safe local admin bootstrap, team memberships and roles, team-scoped service catalog, validation, correlation IDs, safe JSON errors, health, and OpenAPI.
-- **Day 2:** alerts, incidents, sequence-backed incident numbers, alert links, assignment history, notes, a controlled status lifecycle, timeline/audit, optimistic locking, and atomic incident/history/audit/link/outbox persistence.
-- React login/logout with coordinated token refresh, service catalog, alert and incident lists, incident details, assignment, notes, lifecycle actions, filters, and conflict/error handling.
-- Flyway **V1–V4 only**; backend/security tests, a PostgreSQL Testcontainers profile, frontend client tests, and GitHub Actions CI.
+- **Days 1–2:** authentication, rotating refresh sessions, team roles, service catalog, alerts, incident workflow, assignments, notes, timeline, audit, and optimistic locking.
+- **Day 3:** exact alert retry detection, durable conflict evidence, explicit alert grouping, transactional outbox publication, owner leases, bounded retries/dead letters, audited replay, versioned Kafka events, transactional consumer receipts, and Redis cache aside with SQL fallback.
+- **Day 4:** versioned SLA policies, immutable incident deadline snapshots, acknowledgement/mitigation/resolution targets, breach detection and escalation, durable in-app notification delivery with retries and attempt history, health/metrics, and an optional Grafana dashboard.
+- React screens for SLA policies, deadline countdowns, breach evidence, and notification delivery history. Team data refreshes every 15 seconds.
 
-The Day 2 outbox stores a durable promise for future publication. This edition has no Kafka publisher, Redis cache, SLA jobs, dashboard analytics, WebSocket delivery, Python/AI service, vector extension, or later-day migrations.
+See [Day 3 and Day 4 code guide](docs/reliability-and-sla.md) and [current verification](docs/reliability-and-sla-verification.md). The [earlier publishing verification](docs/publishing-verification.md) records the original Days 1–2 edition.
 
 ## Run locally
 
-Start Docker Desktop, then run from the repository root in PowerShell:
+Start Docker Desktop with Linux containers, then run from this repository:
 
 ```powershell
 ./scripts/start.ps1
@@ -23,40 +21,51 @@ Start Docker Desktop, then run from the repository root in PowerShell:
 ./scripts/smoke-incidents.ps1
 ```
 
-The first command creates `.env` with random local secrets if missing, builds the API and frontend, and starts PostgreSQL 17. Existing `.env` files are preserved. First builds need network access and can take several minutes. Ports 8080, 5173 and 55432 must be available.
+Open [IncidentOps](http://localhost:5173), [health](http://localhost:8080/actuator/health), or [Swagger](http://localhost:8080/swagger-ui.html). Read the bootstrap administrator credentials in the generated, ignored `.env`. The setup script preserves an existing `.env` and generates random secrets for a new installation.
 
-Open [the client](http://localhost:5173). Read `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in the ignored `.env`, then sign in. The smoke scripts create demo teams/services/incidents; reload and sign in again to inspect them. No raw token or password is printed by the scripts. Page reload loses the in-memory browser session and requires login.
+The application uses ports 8080 and 5173; PostgreSQL is published on 55432, Kafka on 9094, and Redis on 6379. The Compose project name and PostgreSQL volume from Days 1–2 are preserved. Flyway adds V5, V6, V9, and V10 without changing V1–V4. The version gaps preserve the source migration numbering; V7/V8 belong to later work and are excluded. Existing incidents receive historical SLA snapshots; new incidents use the current policies.
 
-- [API health](http://localhost:8080/actuator/health)
-- [Swagger UI](http://localhost:8080/swagger-ui.html)
-- [OpenAPI JSON](http://localhost:8080/v3/api-docs)
+`docker compose down` stops the stack and preserves its data. After initial bootstrap, disable `BOOTSTRAP_ADMIN_ENABLED`. Changing `.env` does not rotate a password in an existing database. The localhost Kafka/Redis setup is intended for local learning.
 
-Stop with `docker compose down`; this preserves the database. Use this edition's separate Compose database volume, not the evolving application's later-day database. After first bootstrap, disable `BOOTSTRAP_ADMIN_ENABLED` and keep your login password privately. Changing `.env` does not rotate an already initialized database password.
+Optional monitoring:
+
+```powershell
+docker compose --profile observability up -d
+```
+
+Open [Grafana](http://localhost:3000) and [Prometheus](http://localhost:9090). Grafana uses username `admin` and `GRAFANA_ADMIN_PASSWORD`, falling back to the initial bootstrap password. The private API management port 9091 is accessible within Compose; `/actuator/prometheus` is denied on the public API port.
 
 ## Verify
 
-Set `JAVA_HOME` to a JDK 21 installation, then:
+Set `JAVA_HOME` to JDK 21. Run in `backend`:
 
 ```powershell
-cd backend
 ./mvnw.cmd -B package
 ./mvnw.cmd -B -Ppostgres-it verify
-cd ../frontend
-npm ci --no-audit --no-fund
-npm test
-npm run build
 ```
 
-The PostgreSQL profile requires a working Docker engine and fails rather than silently skipping database coverage. Linux/macOS use `sh ./mvnw` instead of `./mvnw.cmd`.
+The second command requires Docker and runs real PostgreSQL/Kafka/Redis integration tests. Infrastructure absence fails the checks rather than silently skipping them. Linux/macOS use `sh ./mvnw`.
 
-See [publishing verification](docs/publishing-verification.md) for this edition's exact executed results and limitations. The API Docker build compiles/packages with tests skipped; the explicit Maven verification command and CI run the tests separately.
+From the repository root, PowerShell helpers support focused verification:
 
-## Model and permissions
+```powershell
+./scripts/verify-reliability.ps1 -Check All
+./scripts/verify-sla.ps1 -Check Clock
+./scripts/verify-sla.ps1 -Check All
+```
 
-The security boundary is a **team**. Each team membership is ADMIN, INCIDENT_MANAGER, RESPONDER, or VIEWER. ADMIN manages memberships; ADMIN and INCIDENT_MANAGER manage catalog data and assignments. Responders can submit alerts/create incidents and work assigned incidents. VIEWER reads only. Every backend read/write checks membership; guessing another team's IDs returns 404. An account-level ADMIN role does not bypass team service permissions.
+In `frontend`, run `npm ci --no-audit --no-fund`, `npm test`, and `npm run build`. Host development uses Node 22. Host backend startup needs `DB_URL=jdbc:postgresql://localhost:55432/incident_ops`, `KAFKA_BOOTSTRAP_SERVERS=localhost:9094`, and the secrets from `.env`; Maven does not load Compose's environment file automatically.
 
-An incident follows `OPEN → ACKNOWLEDGED → INVESTIGATING → MITIGATED → RESOLVED → CLOSED`, with `RESOLVED → REOPENED → INVESTIGATING` for recurrence. SEV1 is most urgent. Changes require the current version; stale edits return HTTP 409. Incident creation saves history, audit, alert links and the pending outbox record in one transaction.
+## Push your changes
 
-Study `AuthService.java`, `TeamService.java`, `ServiceCatalogService.java`, `IncidentService.java`, `IncidentLifecycleService.java`, `V3__teams_and_service_catalog.sql`, `V4__incident_lifecycle.sql`, and `IncidentLifecycleIntegrationTest.java` first.
+The Day 3–4 changes are left uncommitted for review:
 
-This is a local learning application. Production hardening, MFA, password recovery and cleanup jobs are outside these two milestones.
+```powershell
+Set-Location 'D:\ChatGPT\GitHub\incidentops-ai'
+git status --short
+git add .
+git commit -m "Add reliable event delivery and SLA notification operations"
+git push origin main
+```
+
+The security boundary is a team. ADMIN and INCIDENT_MANAGER manage policies and assignments; RESPONDER works assigned incidents; VIEWER reads only. Deadlines use elapsed UTC time and survive policy changes, severity edits, reopening, and scheduler downtime. Delivery is at least once with idempotent database effects. Only local in-app notifications are implemented. Dashboard analytics, WebSockets, Python/AI features, and production hardening remain outside this edition.

@@ -1,0 +1,24 @@
+// Day 5
+local.file_match "api" {
+  path_targets = [{"__path__" = "/var/log/incidentops/application.log", "job" = "incidentops"}]
+}
+loki.source.file "api" {
+  targets    = local.file_match.api.targets
+  forward_to = [loki.write.local.receiver]
+}
+loki.write "local" {
+  endpoint { url = "http://loki:3100/loki/api/v1/push" }
+}
+prometheus.exporter.kafka "broker" {
+  kafka_uris    = ["kafka:9092"]
+  kafka_version = "3.9.1"
+  groups_filter_regex = "incidentops.*"
+}
+prometheus.scrape "kafka" {
+  targets    = prometheus.exporter.kafka.broker.targets
+  forward_to = [prometheus.remote_write.local.receiver]
+  scrape_interval = "5s"
+}
+prometheus.remote_write "local" {
+  endpoint { url = "http://prometheus:9090/api/v1/write" }
+}

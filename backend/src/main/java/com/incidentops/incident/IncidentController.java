@@ -67,7 +67,11 @@ public class IncidentController {
   return service.timeline(auth.getName(),teamId,id);
  }
  @GetMapping("/incidents/{id}/audit")
- public List<AuditResponse> audit(Authentication auth,@PathVariable String teamId,@PathVariable String id){
-  return service.audit(auth.getName(),teamId,id);
+ public List<AuditEntry> audit(Authentication auth,@PathVariable String teamId,@PathVariable String id){
+  return service.audit(auth.getName(),teamId,id).stream().map(AuditEntry::from).toList();
+ }
+ @GetMapping("/incidents/{id}/sla")
+ public List<SlaService.Target> sla(Authentication auth,@PathVariable String teamId,@PathVariable String id){
+  return service.sla(auth.getName(),teamId,id);
  }
 }

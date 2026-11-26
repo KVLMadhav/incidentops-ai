@@ -11,9 +11,12 @@ public class OutboxEvent {
  @Column(name="payload",nullable=false,length=4000) private String payload;
  @Column(name="created_at",nullable=false,columnDefinition="timestamp with time zone") private Instant createdAt;
  @Column(name="published_at",columnDefinition="timestamp with time zone") private Instant publishedAt;
+ @Column(name="available_at",nullable=false,updatable=false,columnDefinition="timestamp with time zone") private Instant availableAt;
+ @Column(name="correlation_id",length=100) private String correlationId;
  protected OutboxEvent() {}
- public OutboxEvent(String teamId, String aggregateId, String eventType, String payload) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.aggregateId=aggregateId; this.eventType=eventType; this.payload=payload; this.createdAt=Instant.now();
+ public OutboxEvent(String teamId, String aggregateId, String eventType, String payload,Instant now,String correlation) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.aggregateId=aggregateId; this.eventType=eventType; this.payload=payload; this.createdAt=now;this.availableAt=now;
+  correlationId=correlation==null?org.slf4j.MDC.get("correlationId"):correlation;if(correlationId==null)correlationId=id;
  }
  public String getTeamId(){return teamId;}
  public String getAggregateId(){return aggregateId;}

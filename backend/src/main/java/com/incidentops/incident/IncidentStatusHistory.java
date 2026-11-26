@@ -13,8 +13,8 @@ public class IncidentStatusHistory {
  @Column(name="reason",length=1000) private String reason;
  @Column(name="changed_at",nullable=false,columnDefinition="timestamp with time zone") private Instant changedAt;
  protected IncidentStatusHistory() {}
- public IncidentStatusHistory(String teamId, String incidentId, String actorUserId, IncidentStatus oldStatus, IncidentStatus newStatus, String reason) {
-  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.oldStatus=oldStatus; this.newStatus=newStatus; this.reason=reason; this.changedAt=Instant.now();
+ public IncidentStatusHistory(String teamId, String incidentId, String actorUserId, IncidentStatus oldStatus, IncidentStatus newStatus, String reason,Instant now) {
+  id=UUID.randomUUID().toString(); this.teamId=teamId; this.incidentId=incidentId; this.actorUserId=actorUserId; this.oldStatus=oldStatus; this.newStatus=newStatus; this.reason=reason; this.changedAt=now;
  }
  public String getTeamId(){return teamId;}
  public String getIncidentId(){return incidentId;}

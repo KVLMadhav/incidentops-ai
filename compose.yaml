@@ -1,42 +1,142 @@
 name: incidentops-days12
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: incident_ops
       POSTGRES_USER: incident_ops
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run scripts/setup-local.ps1}
-    ports: ["127.0.0.1:55432:5432"]
-    volumes: ["postgres-data:/var/lib/postgresql/data"]
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U incident_ops -d incident_ops"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 20
   api:
+    restart: unless-stopped
     build: ./backend
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/incident_ops
-      DB_PASSWORD: ${DB_PASSWORD:?Run scripts/setup-local.ps1}
-      JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?Run scripts/setup-local.ps1}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?Set JWT_SECRET_BASE64 in .env}
       BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-false}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
-    ports: ["127.0.0.1:8080:8080"]
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      LOG_FILE: /var/log/incidentops/application.log
+    volumes:
+      - api-logs:/var/log/incidentops
+    ports:
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/actuator/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+  kafka:
+    restart: unless-stopped
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data/logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "127.0.0.1:9094:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+  redis:
+    restart: unless-stopped
+    image: redis:7.4-alpine
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      start_period: 45s
       retries: 20
   frontend:
+    restart: unless-stopped
     build: ./frontend
-    ports: ["127.0.0.1:5173:80"]
+    ports:
+      - "127.0.0.1:5173:80"
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    command: ['--config.file=/etc/prometheus/prometheus.yml', '--web.enable-remote-write-receiver', '--storage.tsdb.retention.time=7d']
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ['127.0.0.1:9090:9090']
+  loki:
+    image: grafana/loki:3.5.5
+    profiles: [observability]
+    command: ['-config.file=/etc/loki/local.yml']
+    volumes:
+      - ./ops/loki.yml:/etc/loki/local.yml:ro
+      - loki-data:/loki
+  alloy:
+    image: grafana/alloy:v1.11.2
+    profiles: [observability]
+    command: ['run', '--storage.path=/var/lib/alloy/data', '/etc/alloy/config.alloy']
+    volumes:
+      - ./ops/config.alloy:/etc/alloy/config.alloy:ro
+      - api-logs:/var/log/incidentops:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on: [loki, prometheus, kafka]
+  grafana:
+    image: grafana/grafana:12.2.1
+    profiles: [observability]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${BOOTSTRAP_ADMIN_PASSWORD}}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ['127.0.0.1:3000:3000']
+    depends_on: [prometheus, loki]
 volumes:
   postgres-data:
+  kafka-data:
+  api-logs:
+  prometheus-data:
+  loki-data:
+  alloy-data:
+  grafana-data:

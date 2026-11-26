@@ -1,6 +1,40 @@
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 4
   application:
     name: incident-ops
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      fail-fast: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 3000
+        request.timeout.ms: 3000
+        delivery.timeout.ms: 6000
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      max-poll-records: 20
+    listener:
+      ack-mode: manual_immediate
+      auto-startup: ${app.events.enabled}
+  data:
+    redis:
+      repositories:
+        enabled: false
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: 200ms
+      timeout: 200ms
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/incident_ops}
     username: ${DB_USERNAME:incident_ops}
@@ -26,14 +60,37 @@ server:
     include-stacktrace: never
     include-binding-errors: never
 management:
+  server:
+    port: ${MANAGEMENT_PORT:9091}
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,dependencies
+  health:
+    redis:
+      enabled: false
 app:
+  notifications:
+    delivery-enabled: ${NOTIFICATION_DELIVERY_ENABLED:true}
+  events:
+    enabled: ${EVENTS_ENABLED:true}
+    topic: incidentops.incidents.v1
+  cache:
+    enabled: ${CACHE_ENABLED:true}
+  sla:
+    scanning-enabled: ${SLA_SCANNING_ENABLED:true}
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
     issuer: incident-ops
@@ -44,3 +101,15 @@ app:
     enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+logging:
+  structured:
+    format:
+      console: logstash
+      file: logstash
+  file:
+    name: ${LOG_FILE:logs/application.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
